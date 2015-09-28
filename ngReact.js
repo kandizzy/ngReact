@@ -116,9 +116,14 @@
   }
 
   // render React component, with scope[attrs.props] being passed in as the component props
-  function renderComponent(component, props, $timeout, elem) {
+  function renderComponent(component, props, $timeout, elem, scope, $compile, compile) {
     $timeout(function() {
-      React.render(React.createElement(component, props), elem[0]);
+      var rendered = React.render(React.createElement(component, props), elem[0]);
+
+      if (compile) {
+        $compile(rendered.getDOMNode())(scope);
+      }
+      
     });
   }
 
@@ -141,18 +146,23 @@
   //         }
   //     }));
   //
-  var reactComponent = function($timeout, $injector) {
+  var reactComponent = function($timeout, $injector, $compile) {
     return {
       restrict: 'E',
       replace: true,
       link: function(scope, elem, attrs) {
+        var prevScope;
         var reactComponent = getReactComponent(attrs.name, $injector);
 
         var renderMyComponent = function() {
+          var compile = true;
+            if (prevScope) {
+              compile = false;
+            }
           var scopeProps = scope.$eval(attrs.props);
           var props = applyFunctions(scopeProps, scope);
-
-          renderComponent(reactComponent, props, $timeout, elem);
+          prevScope = scope;
+          renderComponent(reactComponent, props, $timeout, elem, prevScope, $compile, compile);
         };
 
         // If there are props, re-render when they change
@@ -195,12 +205,14 @@
   //
   //     <hello name="name"/>
   //
-  var reactDirective = function($timeout, $injector) {
+  var reactDirective = function($timeout, $injector, $compile) {
     return function(reactComponentName, propNames, conf) {
       var directive = {
         restrict: 'E',
         replace: true,
+        terminal: true,
         link: function(scope, elem, attrs) {
+          var prevScope;
           var reactComponent = getReactComponent(reactComponentName, $injector);
 
           // if propNames is not defined, fall back to use the React component's propTypes if present
@@ -208,11 +220,17 @@
 
           // for each of the properties, get their scope value and set it to scope.props
           var renderMyComponent = function() {
+            var compile = true;
+            if (prevScope) {
+              compile = false;
+            }
             var props = {};
             propNames.forEach(function(propName) {
               props[propName] = scope.$eval(attrs[propName]);
             });
-            renderComponent(reactComponent, applyFunctions(props, scope), $timeout, elem);
+
+            prevScope = scope;
+            renderComponent(reactComponent, applyFunctions(props, prevScope), $timeout, elem, prevScope, $compile, compile);
           };
 
           // watch each property name and trigger an update whenever something changes,
@@ -237,6 +255,6 @@
 
   // create the end module without any dependencies, including reactComponent and reactDirective
   return angular.module('react', [])
-    .directive('reactComponent', ['$timeout', '$injector', reactComponent])
-    .factory('reactDirective', ['$timeout','$injector', reactDirective]);
+    .directive('reactComponent', ['$timeout', '$injector', '$compile', reactComponent])
+    .factory('reactDirective', ['$timeout','$injector', '$compile', reactDirective]);
 }));
