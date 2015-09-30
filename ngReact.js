@@ -116,14 +116,13 @@
   }
 
   // render React component, with scope[attrs.props] being passed in as the component props
-  function renderComponent(component, props, $timeout, elem, scope, $compile, compile) {
+  function renderComponent(component, props, $timeout, elem, scope, $compile) {
     $timeout(function() {
       var rendered = React.render(React.createElement(component, props), elem[0]);
-
-      if (compile) {
+      if(angular.isUndefined(scope.compiled)) {
         $compile(rendered.getDOMNode())(scope);
+        scope.compiled = true;
       }
-      
     });
   }
 
@@ -151,18 +150,12 @@
       restrict: 'E',
       replace: true,
       link: function(scope, elem, attrs) {
-        var prevScope;
         var reactComponent = getReactComponent(attrs.name, $injector);
 
         var renderMyComponent = function() {
-          var compile = true;
-            if (prevScope) {
-              compile = false;
-            }
           var scopeProps = scope.$eval(attrs.props);
           var props = applyFunctions(scopeProps, scope);
-          prevScope = scope;
-          renderComponent(reactComponent, props, $timeout, elem, prevScope, $compile, compile);
+          renderComponent(reactComponent, props, $timeout, elem, scope, $compile);
         };
 
         // If there are props, re-render when they change
@@ -210,9 +203,7 @@
       var directive = {
         restrict: 'E',
         replace: true,
-        terminal: true,
         link: function(scope, elem, attrs) {
-          var prevScope;
           var reactComponent = getReactComponent(reactComponentName, $injector);
 
           // if propNames is not defined, fall back to use the React component's propTypes if present
@@ -220,17 +211,12 @@
 
           // for each of the properties, get their scope value and set it to scope.props
           var renderMyComponent = function() {
-            var compile = true;
-            if (prevScope) {
-              compile = false;
-            }
             var props = {};
             propNames.forEach(function(propName) {
               props[propName] = scope.$eval(attrs[propName]);
             });
 
-            prevScope = scope;
-            renderComponent(reactComponent, applyFunctions(props, prevScope), $timeout, elem, prevScope, $compile, compile);
+            renderComponent(reactComponent, applyFunctions(props, scope), $timeout, elem, scope, $compile);
           };
 
           // watch each property name and trigger an update whenever something changes,
